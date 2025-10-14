@@ -1,91 +1,18 @@
 <!doctype html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Clarity Compass – Public Beta</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-  <style>
-    :root{
-      --bg:#0b0c10; --panel:#121318; --text:#e6e6e6; --muted:#9aa3ad; --accent:#22c55e;
-    }
-    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}
-    .wrap{max-width:900px;margin:0 auto;padding:24px}
-    .card{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 18px 22px;box-shadow:0 10px 30px rgba(0,0,0,.3);}
-    h1{font-size:28px;margin:0 0 8px}
-    p{color:var(--muted);margin:6px 0 14px}
-    label{display:block;margin:10px 0 6px;font-weight:600}
-    input,select,button,textarea{font:inherit}
-    input[type=text]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#0f1014;color:#e6e6e6}
-    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-    .btn{border:0;border-radius:12px;padding:12px 14px;background:var(--accent);color:#051406;font-weight:700;cursor:pointer}
-    .btn.secondary{background:#1f2937;color:#e6e6e6}
-    .muted{color:#8a93a0;font-size:13px}
-    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .hidden{display:none}
-    .result{white-space:pre-wrap;background:#0f1014;border:1px solid rgba(255,255,255,.08);padding:12px;border-radius:12px}
-    canvas{width:100%;height:auto;background:#0f1014;border-radius:12px;border:1px solid rgba(255,255,255,.08)}
-  </style>
-</head>
-<body>
-  <div class="wrap">
-    <div class="card">
-      <h1>Clarity Compass – Public Beta</h1>
-      <p>Paste a URL (or skip for uploads). We’ll analyze text and simple structure heuristics. Optionally, upload up to 3 screenshots to help assess visual tone. No login pages.</p>
-      <div class="row">
-        <div>
-          <label>Context</label>
-          <select id="context">
-            <option value="consultancy">Consultancy / Agency</option>
-            <option value="saas">SaaS / Product</option>
-            <option value="outdoor">Outdoor / Physical brand</option>
-          </select>
-        </div>
-        <div>
-          <label>What are we evaluating (scope)?</label>
-          <input id="scope" type="text" placeholder="e.g., Homepage, Pricing page, AA28 product page" />
-        </div>
-      </div>
-      <label>Website URL (optional)</label>
-      <input id="url" type="text" placeholder="https://example.com" />
+<script>
+  const scope = document.getElementById('scope');
+  const context = document.getElementById('context');
+  const urlInput = document.getElementById('url');
+  const shots = document.getElementById('shots');
+  const out = document.getElementById('out');
+  const runBtn = document.getElementById('run');
+  const demoBtn = document.getElementById('demo');
 
-      <label>Upload up to 3 screenshots (optional)</label>
-      <input id="shots" type="file" accept="image/*" multiple />
-      <p class="muted">We won’t store files after processing (beta). Large images will be downscaled in the browser to reduce upload size.</p>
+  demoBtn.onclick = () => { urlInput.value = 'https://example.com'; scope.value = 'Homepage'; };
 
-      <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
-        <button class="btn" id="run">Run analysis</button>
-        <button class="btn secondary" id="demo">Use demo URL</button>
-      </div>
-    </div>
-
-    <div id="out" class="card hidden" style="margin-top:14px;">
-      <h2 style="margin:6px 0 8px">Results</h2>
-      <div class="grid">
-        <div>
-          <canvas id="radar" width="420" height="420" aria-label="Radar chart"></canvas>
-        </div>
-        <div>
-          <div class="result" id="json"></div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    const scope = document.getElementById('scope');
-    const context = document.getElementById('context');
-    const urlInput = document.getElementById('url');
-    const shots = document.getElementById('shots');
-    const out = document.getElementById('out');
-    const runBtn = document.getElementById('run');
-    const demoBtn = document.getElementById('demo');
-
-    demoBtn.onclick = () => { urlInput.value = 'https://example.com'; scope.value = 'Homepage'; };
-
-    runBtn.onclick = async () => {
+  runBtn.onclick = async () => {
+    try {
       const cm = await getClientMetrics(shots.files);
       const payload = {
         url: urlInput.value.trim(),
@@ -94,18 +21,114 @@
         clientMetrics: cm
       };
 
-      const r = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const r = await fetch('/api/analyze', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(payload)
+      });
       const data = await r.json();
+
       renderRadar('radar', data.scores);
       document.getElementById('json').textContent = JSON.stringify(data, null, 2);
       out.classList.remove('hidden');
-    };
-
-    async function getClientMetrics(fileList){
-      const files = Array.from(fileList || []).slice(0,3);
-      if(files.length===0) return null;
-      const bitmaps = await Promise.all(files.map(f=>createImageBitmap(f)));
+    } catch (err) {
+      alert('Something went wrong. Open DevTools → Console to see details.');
+      console.error(err);
     }
-  </script>
-</body>
+  };
+
+  // ---- Client-side image heuristics (optional; keeps free tier)
+  async function getClientMetrics(fileList){
+    const files = Array.from(fileList || []).slice(0,3);
+    if(files.length===0) return null;
+
+    const bitmaps = await Promise.all(files.map(f=>createImageBitmap(f)));
+    const metrics = bitmaps.map(bm=>analyzeBitmap(bm));
+
+    const avg = (k)=> metrics.reduce((a,m)=>a+m[k],0)/metrics.length;
+
+    const edge = avg('edge');      // more edges = more visual noise
+    const colors = avg('colors');  // more unique colors = less consistency
+    const bright = avg('bright');  // crude proxy for “light” tone
+
+    return {
+      visualConsistency: clamp01(1 - (colors*0.4 + edge*0.6)),
+      visualTone: clamp01(bright),
+      visualEnvironment: 0.5,                 // placeholder until we add a selector
+      storyEmotion: clamp01(0.3 + (1-edge)*0.4),
+      storyIdentity: clamp01(0.3 + (1-colors)*0.5)
+    };
+  }
+
+  function analyzeBitmap(bm){
+    const c = new OffscreenCanvas(bm.width, bm.height);
+    const ctx = c.getContext('2d');
+    const w = 640; const h = Math.round(bm.height * (w/bm.width));
+    ctx.drawImage(bm, 0, 0, w, h);
+    const img = ctx.getImageData(0, 0, w, h);
+
+    let edges=0, colorsSet=new Set(), total=w*h, brightSum=0;
+
+    for(let i=0;i<img.data.length;i+=4){
+      const r=img.data[i], g=img.data[i+1], b=img.data[i+2];
+      const y = (0.2126*r+0.7152*g+0.0722*b)/255; // luminance
+      brightSum += y;
+      colorsSet.add(((r>>4)<<8) | ((g>>4)<<4) | (b>>4)); // reduced palette index
+
+      if(i>4){
+        const pr=img.data[i-4], pg=img.data[i-3], pb=img.data[i-2];
+        const py=(0.2126*pr+0.7152*pg+0.0722*pb)/255;
+        if(Math.abs(y-py)>0.25) edges++;
+      }
+    }
+    return {
+      edge: edges/total,
+      colors: Math.min(1, colorsSet.size/4096),
+      bright: brightSum/total
+    };
+  }
+
+  function clamp01(x){ return Math.max(0, Math.min(1, x)); }
+
+  // ---- Simple radar renderer (canvas)
+  function renderRadar(id, scores){
+    const cvs = document.getElementById(id);
+    const ctx = cvs.getContext('2d');
+    const size = cvs.width;
+    ctx.clearRect(0,0,size,size);
+
+    const cx = size/2, cy = size/2, R = 160;
+    const toRad = a => a*Math.PI/180;
+
+    // grid
+    ctx.strokeStyle = 'rgba(255,255,255,.1)';
+    for(let r=R/3;r<=R;r+=R/3){ ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke(); }
+
+    const lensAvg = vals => vals.reduce((a,b)=>a+b,0)/vals.length;
+
+    const u = lensAvg(Object.values(scores.user))/5;
+    const v = lensAvg(Object.values(scores.visual))/5;
+    const s = lensAvg(Object.values(scores.story))/5;
+
+    const points = [
+      {a:-90, r:u*R}, {a:30, r:v*R}, {a:150, r:s*R}
+    ].map(p=>({ x: cx+Math.cos(toRad(p.a))*p.r, y: cy+Math.sin(toRad(p.a))*p.r }));
+
+    // polygon
+    ctx.beginPath(); ctx.moveTo(points[0].x, points[0].y);
+    points.slice(1).forEach(p=>ctx.lineTo(p.x,p.y));
+    ctx.closePath();
+    ctx.fillStyle='rgba(34,197,94,.35)';
+    ctx.strokeStyle='rgba(34,197,94,.9)';
+    ctx.lineWidth=2;
+    ctx.fill(); ctx.stroke();
+
+    // labels
+    ctx.fillStyle='#e6e6e6'; ctx.font='14px Inter'; ctx.textAlign='center';
+    [[-90,'User'],[30,'Visual'],[150,'Story']].forEach(([a,l])=>{
+      ctx.fillText(l, cx+Math.cos(toRad(a))*(R+16), cy+Math.sin(toRad(a))*(R+16));
+    });
+  }
+</script>
+
 </html>
