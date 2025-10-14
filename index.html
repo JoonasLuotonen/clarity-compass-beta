@@ -10,78 +10,25 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 
   <style>
-    :root {
-      --bg: #0b0c10;
-      --panel: #121318;
-      --text: #e6e6e6;
-      --muted: #9aa3ad;
-      --accent: #22c55e;
-    }
-
-    body {
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: Inter, system-ui, sans-serif;
-    }
-
-    .wrap { max-width: 900px; margin: 0 auto; padding: 24px; }
-    .card {
-      background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, .08);
-      border-radius: 16px;
-      padding: 18px 18px 22px;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, .3);
-    }
-
-    h1 { font-size: 28px; margin: 0 0 8px; }
-    p { color: var(--muted); margin: 6px 0 14px; }
-    label { display: block; margin: 10px 0 6px; font-weight: 600; }
-
-    input, select, button, textarea { font: inherit; }
-    input[type=text] {
-      width: 100%;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.12);
-      background: #0f1014;
-      color: #e6e6e6;
-    }
-
-    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .btn {
-      border: 0;
-      border-radius: 12px;
-      padding: 12px 14px;
-      background: var(--accent);
-      color: #051406;
-      font-weight: 700;
-      cursor: pointer;
-    }
-    .btn.secondary { background: #1f2937; color: #e6e6e6; }
-
-    .muted { color: #8a93a0; font-size: 13px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-    .hidden { display: none; }
-    .result {
-      white-space: pre-wrap;
-      background: #0f1014;
-      border: 1px solid rgba(255,255,255,.08);
-      padding: 12px;
-      border-radius: 12px;
-      overflow-wrap: anywhere;
-      font-size: 13px;
-    }
-    canvas {
-      width: 100%;
-      height: auto;
-      background: #0f1014;
-      border-radius: 12px;
-      border: 1px solid rgba(255,255,255,.08);
-    }
+    :root { --bg:#0b0c10; --panel:#121318; --text:#e6e6e6; --muted:#9aa3ad; --accent:#22c55e; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; }
+    .wrap { max-width:900px; margin:0 auto; padding:24px; }
+    .card { background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:18px 18px 22px; box-shadow:0 10px 30px rgba(0,0,0,.3); }
+    h1 { font-size:28px; margin:0 0 8px; }
+    p { color:var(--muted); margin:6px 0 14px; }
+    label { display:block; margin:10px 0 6px; font-weight:600; }
+    input,select,button,textarea { font:inherit; }
+    input[type=text]{ width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0f1014; color:#e6e6e6; }
+    .row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .btn{ border:0; border-radius:12px; padding:12px 14px; background:var(--accent); color:#051406; font-weight:700; cursor:pointer; }
+    .btn.secondary{ background:#1f2937; color:#e6e6e6; }
+    .muted{ color:#8a93a0; font-size:13px; }
+    .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+    .hidden{ display:none; }
+    .result{ white-space:pre-wrap; background:#0f1014; border:1px solid rgba(255,255,255,.08); padding:12px; border-radius:12px; overflow-wrap:anywhere; font-size:13px; }
+    canvas{ width:100%; height:auto; background:#0f1014; border-radius:12px; border:1px solid rgba(255,255,255,.08); }
   </style>
 </head>
-
 <body>
   <div class="wrap">
     <div class="card">
@@ -126,93 +73,10 @@
   </div>
 
   <script>
-    const scope = document.getElementById('scope');
-    const context = document.getElementById('context');
-    const urlInput = document.getElementById('url');
-    const shots = document.getElementById('shots');
-    const out = document.getElementById('out');
-    const runBtn = document.getElementById('run');
-    const demoBtn = document.getElementById('demo');
+    // ---------- helpers & radar FIRST (so it's available to click handler)
+    function clamp01(x){ return Math.max(0, Math.min(1, x)); }
 
-    demoBtn.onclick = () => { urlInput.value = 'https://example.com'; scope.value = 'Homepage'; };
-
-    runBtn.onclick = async () => {
-      try {
-        const cm = await getClientMetrics(shots.files);
-        const payload = {
-          url: urlInput.value.trim(),
-          context: context.value,
-          scopeLabel: scope.value.trim(),
-          clientMetrics: cm
-        };
-
-        const r = await fetch('/api/analyze', {
-          method: 'POST',
-          headers: {'Content-Type':'application/json'},
-          body: JSON.stringify(payload)
-        });
-
-        const data = await r.json();
-        renderRadar('radar', data.scores);
-        document.getElementById('json').textContent = JSON.stringify(data, null, 2);
-        out.classList.remove('hidden');
-      } catch (err) {
-        alert('Something went wrong. Check console for details.');
-        console.error(err);
-      }
-    };
-
-    async function getClientMetrics(fileList) {
-      const files = Array.from(fileList || []).slice(0,3);
-      if (files.length === 0) return null;
-
-      const bitmaps = await Promise.all(files.map(f => createImageBitmap(f)));
-      const metrics = bitmaps.map(bm => analyzeBitmap(bm));
-      const avg = k => metrics.reduce((a,m) => a+m[k],0)/metrics.length;
-
-      const edge = avg('edge');
-      const colors = avg('colors');
-      const bright = avg('bright');
-
-      return {
-        visualConsistency: clamp01(1 - (colors*0.4 + edge*0.6)),
-        visualTone: clamp01(bright),
-        visualEnvironment: 0.5,
-        storyEmotion: clamp01(0.3 + (1-edge)*0.4),
-        storyIdentity: clamp01(0.3 + (1-colors)*0.5)
-      };
-    }
-
-    function analyzeBitmap(bm) {
-      const c = new OffscreenCanvas(bm.width, bm.height);
-      const ctx = c.getContext('2d');
-      const w = 640;
-      const h = Math.round(bm.height * (w/bm.width));
-      ctx.drawImage(bm, 0, 0, w, h);
-      const img = ctx.getImageData(0, 0, w, h);
-
-      let edges = 0, colorsSet = new Set(), total = w*h, brightSum = 0;
-      for (let i=0; i<img.data.length; i+=4) {
-        const r = img.data[i], g = img.data[i+1], b = img.data[i+2];
-        const y = (0.2126*r + 0.7152*g + 0.0722*b)/255;
-        brightSum += y;
-        colorsSet.add(((r>>4)<<8) | ((g>>4)<<4) | (b>>4));
-        if (i>4) {
-          const pr = img.data[i-4], pg = img.data[i-3], pb = img.data[i-2];
-          const py = (0.2126*pr + 0.7152*pg + 0.0722*pb)/255;
-          if (Math.abs(y-py) > 0.25) edges++;
-        }
-      }
-      return {
-        edge: edges/total,
-        colors: Math.min(1, colorsSet.size/4096),
-        bright: brightSum/total
-      };
-    }
-
-    function clamp01(x) { return Math.max(0, Math.min(1, x)); }
-
-    function renderRadar(id, scores) {
+    function renderRadar(id, scores){
       const cvs = document.getElementById(id);
       const ctx = cvs.getContext('2d');
       const size = cvs.width;
@@ -221,6 +85,7 @@
       const cx = size/2, cy = size/2, R = 160;
       const toRad = a => a * Math.PI / 180;
 
+      // grid
       ctx.strokeStyle='rgba(255,255,255,.1)';
       for(let r=R/3;r<=R;r+=R/3){ ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke(); }
 
@@ -251,6 +116,108 @@
         ctx.fillText(l, cx+Math.cos(toRad(a))*(R+16), cy+Math.sin(toRad(a))*(R+16));
       });
     }
+
+    // Safari-friendly bitmap analysis (no OffscreenCanvas)
+    async function getClientMetrics(fileList){
+      const files = Array.from(fileList || []).slice(0,3);
+      if(files.length===0) return null;
+
+      const bitmaps = await Promise.all(files.map(loadBitmapCompat));
+      const metrics = bitmaps.map(analyzeBitmapCompat);
+
+      const avg = k => metrics.reduce((a,m)=>a+m[k],0)/metrics.length;
+      const edge = avg('edge');
+      const colors = avg('colors');
+      const bright = avg('bright');
+
+      return {
+        visualConsistency: clamp01(1 - (colors*0.4 + edge*0.6)),
+        visualTone: clamp01(bright),
+        visualEnvironment: 0.5,
+        storyEmotion: clamp01(0.3 + (1-edge)*0.4),
+        storyIdentity: clamp01(0.3 + (1-colors)*0.5)
+      };
+    }
+
+    function analyzeBitmapCompat(imgLike){
+      // imgLike can be ImageBitmap or <img>/<canvas>; draw to a temporary canvas
+      const cnv = document.createElement('canvas');
+      const w = 640;
+      const h = Math.round(imgLike.height * (w / imgLike.width));
+      cnv.width = w; cnv.height = h;
+      const ctx = cnv.getContext('2d', { willReadFrequently:true });
+      ctx.drawImage(imgLike, 0, 0, w, h);
+      const img = ctx.getImageData(0, 0, w, h);
+
+      let edges=0, colorsSet=new Set(), total=w*h, brightSum=0;
+      for(let i=0;i<img.data.length;i+=4){
+        const r=img.data[i], g=img.data[i+1], b=img.data[i+2];
+        const y=(0.2126*r+0.7152*g+0.0722*b)/255;
+        brightSum+=y;
+        colorsSet.add(((r>>4)<<8)|((g>>4)<<4)|(b>>4));
+        if(i>4){
+          const pr=img.data[i-4], pg=img.data[i-3], pb=img.data[i-2];
+          const py=(0.2126*pr+0.7152*pg+0.0722*pb)/255;
+          if(Math.abs(y-py)>0.25) edges++;
+        }
+      }
+      return { edge: edges/total, colors: Math.min(1, colorsSet.size/4096), bright: brightSum/total };
+    }
+
+    async function loadBitmapCompat(file){
+      // If createImageBitmap exists, use it; otherwise load into <img>
+      if('createImageBitmap' in window){
+        return await createImageBitmap(file);
+      } else {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.src = url;
+        await img.decode();
+        URL.revokeObjectURL(url);
+        // mimic ImageBitmap shape for our analyzer
+        img.width = img.naturalWidth;
+        img.height = img.naturalHeight;
+        return img;
+      }
+    }
+
+    // ---------- wire up UI
+    const scope = document.getElementById('scope');
+    const context = document.getElementById('context');
+    const urlInput = document.getElementById('url');
+    const shots = document.getElementById('shots');
+    const out = document.getElementById('out');
+    const runBtn = document.getElementById('run');
+    const demoBtn = document.getElementById('demo');
+
+    demoBtn.onclick = () => { urlInput.value = 'https://example.com'; scope.value = 'Homepage'; };
+
+    runBtn.onclick = async () => {
+      try{
+        const cm = await getClientMetrics(shots.files);
+        const payload = {
+          url: urlInput.value.trim(),
+          context: context.value,
+          scopeLabel: scope.value.trim(),
+          clientMetrics: cm
+        };
+
+        const r = await fetch('/api/analyze', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify(payload)
+        });
+        const data = await r.json();
+
+        // draw & show
+        renderRadar('radar', data.scores);
+        document.getElementById('json').textContent = JSON.stringify(data, null, 2);
+        out.classList.remove('hidden');
+      }catch(err){
+        console.error(err);
+        alert('Something went wrong. Open the browser console for details.');
+      }
+    };
   </script>
 </body>
 </html>
