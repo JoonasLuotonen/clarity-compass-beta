@@ -4,28 +4,27 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Clarity Compass – Public Beta</title>
-
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-
   <style>
     :root { --bg:#0b0c10; --panel:#121318; --text:#e6e6e6; --muted:#9aa3ad; --accent:#22c55e; }
     body { margin:0; background:var(--bg); color:var(--text); font-family:Inter,system-ui,sans-serif; }
     .wrap { max-width:900px; margin:0 auto; padding:24px; }
     .card { background:var(--panel); border:1px solid rgba(255,255,255,.08); border-radius:16px; padding:18px 18px 22px; box-shadow:0 10px 30px rgba(0,0,0,.3); }
     h1 { font-size:28px; margin:0 0 8px; }
-    p { color:var(--muted); margin:6px 0 14px; }
+    p  { color:var(--muted); margin:6px 0 14px; }
     label { display:block; margin:10px 0 6px; font-weight:600; }
-    input,select,button,textarea { font:inherit; }
+    input,select,button { font:inherit; }
     input[type=text]{ width:100%; padding:10px 12px; border-radius:12px; border:1px solid rgba(255,255,255,.12); background:#0f1014; color:#e6e6e6; }
-    .row{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
-    .btn{ border:0; border-radius:12px; padding:12px 14px; background:var(--accent); color:#051406; font-weight:700; cursor:pointer; }
+    .row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    .btn { border:0; border-radius:12px; padding:12px 14px; background:var(--accent); color:#051406; font-weight:700; cursor:pointer; }
     .btn.secondary{ background:#1f2937; color:#e6e6e6; }
     .muted{ color:#8a93a0; font-size:13px; }
     .grid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; }
     .hidden{ display:none; }
     .result{ white-space:pre-wrap; background:#0f1014; border:1px solid rgba(255,255,255,.08); padding:12px; border-radius:12px; overflow-wrap:anywhere; font-size:13px; }
+    .error { color:#ffb4b4; }
     canvas{ width:100%; height:auto; background:#0f1014; border-radius:12px; border:1px solid rgba(255,255,255,.08); }
   </style>
 </head>
@@ -33,7 +32,7 @@
   <div class="wrap">
     <div class="card">
       <h1>Clarity Compass – Public Beta</h1>
-      <p>Paste a URL (or skip for uploads). We’ll analyze text and simple structure heuristics. Optionally, upload up to 3 screenshots to help assess visual tone. No login pages.</p>
+      <p>Paste a URL (or skip for uploads). Optionally upload up to 3 screenshots. No login pages.</p>
 
       <div class="row">
         <div>
@@ -55,12 +54,13 @@
 
       <label>Upload up to 3 screenshots (optional)</label>
       <input id="shots" type="file" accept="image/*" multiple />
-      <p class="muted">We won’t store files after processing (beta). Large images will be downscaled in the browser to reduce upload size.</p>
+      <p class="muted">Files are analyzed in-browser and not stored after processing (beta).</p>
 
       <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
         <button class="btn" id="run">Run analysis</button>
         <button class="btn secondary" id="demo">Use demo URL</button>
       </div>
+      <p id="msg" class="muted" style="margin-top:8px;"></p>
     </div>
 
     <div id="out" class="card hidden" style="margin-top:14px;">
@@ -73,11 +73,14 @@
   </div>
 
   <script>
-    // ---------- helpers & radar FIRST (so it's available to click handler)
+    "use strict";
+
+    // ---------- helpers declared first (so they're available everywhere)
     function clamp01(x){ return Math.max(0, Math.min(1, x)); }
 
     function renderRadar(id, scores){
       const cvs = document.getElementById(id);
+      if (!cvs) return;
       const ctx = cvs.getContext('2d');
       const size = cvs.width;
       ctx.clearRect(0,0,size,size);
@@ -85,7 +88,6 @@
       const cx = size/2, cy = size/2, R = 160;
       const toRad = a => a * Math.PI / 180;
 
-      // grid
       ctx.strokeStyle='rgba(255,255,255,.1)';
       for(let r=R/3;r<=R;r+=R/3){ ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke(); }
 
@@ -94,22 +96,17 @@
       const v = lensAvg(Object.values(scores.visual))/5;
       const s = lensAvg(Object.values(scores.story))/5;
 
-      const points = [
+      const pts = [
         {a:-90, r:u*R}, {a:30, r:v*R}, {a:150, r:s*R}
-      ].map(p => ({
-        x: cx + Math.cos(toRad(p.a))*p.r,
-        y: cy + Math.sin(toRad(p.a))*p.r
-      }));
+      ].map(p => ({ x: cx + Math.cos(toRad(p.a))*p.r, y: cy + Math.sin(toRad(p.a))*p.r }));
 
-      ctx.beginPath();
-      ctx.moveTo(points[0].x, points[0].y);
-      points.slice(1).forEach(p => ctx.lineTo(p.x,p.y));
+      ctx.beginPath(); ctx.moveTo(pts[0].x, pts[0].y);
+      ctx.lineTo(pts[1].x, pts[1].y);
+      ctx.lineTo(pts[2].x, pts[2].y);
       ctx.closePath();
-
       ctx.fillStyle='rgba(34,197,94,.35)';
       ctx.strokeStyle='rgba(34,197,94,.9)';
-      ctx.lineWidth=2;
-      ctx.fill(); ctx.stroke();
+      ctx.lineWidth=2; ctx.fill(); ctx.stroke();
 
       ctx.fillStyle='#e6e6e6'; ctx.font='14px Inter'; ctx.textAlign='center';
       [[-90,'User'],[30,'Visual'],[150,'Story']].forEach(([a,l])=>{
@@ -117,19 +114,47 @@
       });
     }
 
-    // Safari-friendly bitmap analysis (no OffscreenCanvas)
+    async function loadBitmapCompat(file){
+      if ('createImageBitmap' in window) return await createImageBitmap(file);
+      return new Promise((resolve, reject) => {
+        const url = URL.createObjectURL(file);
+        const img = new Image();
+        img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+        img.onerror = e => { URL.revokeObjectURL(url); reject(e); };
+        img.src = url;
+      });
+    }
+
+    function analyzeBitmapCompat(img){
+      const cnv = document.createElement('canvas');
+      const w = 640, h = Math.round(img.height * (w / img.width));
+      cnv.width = w; cnv.height = h;
+      const ctx = cnv.getContext('2d', { willReadFrequently:true });
+      ctx.drawImage(img, 0, 0, w, h);
+      const data = ctx.getImageData(0,0,w,h).data;
+
+      let edges=0, colors=new Set(), brightSum=0, total=w*h;
+      for(let i=0;i<data.length;i+=4){
+        const r=data[i], g=data[i+1], b=data[i+2];
+        const y=(0.2126*r+0.7152*g+0.0722*b)/255;
+        brightSum += y;
+        colors.add(((r>>4)<<8)|((g>>4)<<4)|(b>>4));
+        if(i>4){
+          const pr=data[i-4], pg=data[i-3], pb=data[i-2];
+          const py=(0.2126*pr+0.7152*pg+0.0722*pb)/255;
+          if(Math.abs(y-py)>0.25) edges++;
+        }
+      }
+      return { edge: edges/total, colors: Math.min(1, colors.size/4096), bright: brightSum/total };
+    }
+
     async function getClientMetrics(fileList){
       const files = Array.from(fileList || []).slice(0,3);
       if(files.length===0) return null;
-
       const bitmaps = await Promise.all(files.map(loadBitmapCompat));
       const metrics = bitmaps.map(analyzeBitmapCompat);
-
       const avg = k => metrics.reduce((a,m)=>a+m[k],0)/metrics.length;
-      const edge = avg('edge');
-      const colors = avg('colors');
-      const bright = avg('bright');
-
+      const edge = avg('edge'), colors = avg('colors'), bright = avg('bright');
       return {
         visualConsistency: clamp01(1 - (colors*0.4 + edge*0.6)),
         visualTone: clamp01(bright),
@@ -139,83 +164,44 @@
       };
     }
 
-    function analyzeBitmapCompat(imgLike){
-      // imgLike can be ImageBitmap or <img>/<canvas>; draw to a temporary canvas
-      const cnv = document.createElement('canvas');
-      const w = 640;
-      const h = Math.round(imgLike.height * (w / imgLike.width));
-      cnv.width = w; cnv.height = h;
-      const ctx = cnv.getContext('2d', { willReadFrequently:true });
-      ctx.drawImage(imgLike, 0, 0, w, h);
-      const img = ctx.getImageData(0, 0, w, h);
-
-      let edges=0, colorsSet=new Set(), total=w*h, brightSum=0;
-      for(let i=0;i<img.data.length;i+=4){
-        const r=img.data[i], g=img.data[i+1], b=img.data[i+2];
-        const y=(0.2126*r+0.7152*g+0.0722*b)/255;
-        brightSum+=y;
-        colorsSet.add(((r>>4)<<8)|((g>>4)<<4)|(b>>4));
-        if(i>4){
-          const pr=img.data[i-4], pg=img.data[i-3], pb=img.data[i-2];
-          const py=(0.2126*pr+0.7152*pg+0.0722*pb)/255;
-          if(Math.abs(y-py)>0.25) edges++;
-        }
-      }
-      return { edge: edges/total, colors: Math.min(1, colorsSet.size/4096), bright: brightSum/total };
-    }
-
-    async function loadBitmapCompat(file){
-      // If createImageBitmap exists, use it; otherwise load into <img>
-      if('createImageBitmap' in window){
-        return await createImageBitmap(file);
-      } else {
-        const url = URL.createObjectURL(file);
-        const img = new Image();
-        img.src = url;
-        await img.decode();
-        URL.revokeObjectURL(url);
-        // mimic ImageBitmap shape for our analyzer
-        img.width = img.naturalWidth;
-        img.height = img.naturalHeight;
-        return img;
-      }
-    }
-
-    // ---------- wire up UI
-    const scope = document.getElementById('scope');
-    const context = document.getElementById('context');
-    const urlInput = document.getElementById('url');
-    const shots = document.getElementById('shots');
+    // ---------- wire up UI (after helpers are defined)
+    const scopeEl = document.getElementById('scope');
+    const contextEl = document.getElementById('context');
+    const urlEl = document.getElementById('url');
+    const shotsEl = document.getElementById('shots');
     const out = document.getElementById('out');
+    const msg = document.getElementById('msg');
     const runBtn = document.getElementById('run');
     const demoBtn = document.getElementById('demo');
 
-    demoBtn.onclick = () => { urlInput.value = 'https://example.com'; scope.value = 'Homepage'; };
+    demoBtn.onclick = () => { urlEl.value = 'https://example.com'; scopeEl.value = 'Homepage'; };
 
     runBtn.onclick = async () => {
-      try{
-        const cm = await getClientMetrics(shots.files);
+      msg.textContent = 'Running analysis…'; msg.classList.remove('error');
+      try {
+        const cm = await getClientMetrics(shotsEl.files);
         const payload = {
-          url: urlInput.value.trim(),
-          context: context.value,
-          scopeLabel: scope.value.trim(),
+          url: urlEl.value.trim(),
+          context: contextEl.value,
+          scopeLabel: scopeEl.value.trim(),
           clientMetrics: cm
         };
-
         const r = await fetch('/api/analyze', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
           body: JSON.stringify(payload)
         });
         const data = await r.json();
+        if (data.error) throw new Error(data.error);
 
-        // draw & show
         renderRadar('radar', data.scores);
         document.getElementById('json').textContent = JSON.stringify(data, null, 2);
         out.classList.remove('hidden');
-      }catch(err){
+        msg.textContent = 'Done.';
+      } catch (err) {
         console.error(err);
-        alert('Something went wrong. Open the browser console for details.');
+        msg.textContent = 'Error: ' + (err.message || 'Analysis failed');
+        msg.classList.add('error');
       }
     };
   </script>
