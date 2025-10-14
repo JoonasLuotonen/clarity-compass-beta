@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Clarity Compass – Public Beta</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#0b0c10; --panel:#121318; --text:#e6e6e6; --muted:#9aa3ad; --accent:#22c55e;
+    }
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif}
+    .wrap{max-width:900px;margin:0 auto;padding:24px}
+    .card{background:var(--panel);border:1px solid rgba(255,255,255,.08);border-radius:16px;padding:18px 18px 22px;box-shadow:0 10px 30px rgba(0,0,0,.3);}
+    h1{font-size:28px;margin:0 0 8px}
+    p{color:var(--muted);margin:6px 0 14px}
+    label{display:block;margin:10px 0 6px;font-weight:600}
+    input,select,button,textarea{font:inherit}
+    input[type=text]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid rgba(255,255,255,.12);background:#0f1014;color:#e6e6e6}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .btn{border:0;border-radius:12px;padding:12px 14px;background:var(--accent);color:#051406;font-weight:700;cursor:pointer}
+    .btn.secondary{background:#1f2937;color:#e6e6e6}
+    .muted{color:#8a93a0;font-size:13px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+    .hidden{display:none}
+    .result{white-space:pre-wrap;background:#0f1014;border:1px solid rgba(255,255,255,.08);padding:12px;border-radius:12px}
+    canvas{width:100%;height:auto;background:#0f1014;border-radius:12px;border:1px solid rgba(255,255,255,.08)}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>Clarity Compass – Public Beta</h1>
+      <p>Paste a URL (or skip for uploads). We’ll analyze text and simple structure heuristics. Optionally, upload up to 3 screenshots to help assess visual tone. No login pages.</p>
+      <div class="row">
+        <div>
+          <label>Context</label>
+          <select id="context">
+            <option value="consultancy">Consultancy / Agency</option>
+            <option value="saas">SaaS / Product</option>
+            <option value="outdoor">Outdoor / Physical brand</option>
+          </select>
+        </div>
+        <div>
+          <label>What are we evaluating (scope)?</label>
+          <input id="scope" type="text" placeholder="e.g., Homepage, Pricing page, AA28 product page" />
+        </div>
+      </div>
+      <label>Website URL (optional)</label>
+      <input id="url" type="text" placeholder="https://example.com" />
+
+      <label>Upload up to 3 screenshots (optional)</label>
+      <input id="shots" type="file" accept="image/*" multiple />
+      <p class="muted">We won’t store files after processing (beta). Large images will be downscaled in the browser to reduce upload size.</p>
+
+      <div style="margin-top:10px; display:flex; gap:10px; align-items:center;">
+        <button class="btn" id="run">Run analysis</button>
+        <button class="btn secondary" id="demo">Use demo URL</button>
+      </div>
+    </div>
+
+    <div id="out" class="card hidden" style="margin-top:14px;">
+      <h2 style="margin:6px 0 8px">Results</h2>
+      <div class="grid">
+        <div>
+          <canvas id="radar" width="420" height="420" aria-label="Radar chart"></canvas>
+        </div>
+        <div>
+          <div class="result" id="json"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const scope = document.getElementById('scope');
+    const context = document.getElementById('context');
+    const urlInput = document.getElementById('url');
+    const shots = document.getElementById('shots');
+    const out = document.getElementById('out');
+    const runBtn = document.getElementById('run');
+    const demoBtn = document.getElementById('demo');
+
+    demoBtn.onclick = () => { urlInput.value = 'https://example.com'; scope.value = 'Homepage'; };
+
+    runBtn.onclick = async () => {
+      const cm = await getClientMetrics(shots.files);
+      const payload = {
+        url: urlInput.value.trim(),
+        context: context.value,
+        scopeLabel: scope.value.trim(),
+        clientMetrics: cm
+      };
+
+      const r = await fetch('/api/analyze', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+      const data = await r.json();
+      renderRadar('radar', data.scores);
+      document.getElementById('json').textContent = JSON.stringify(data, null, 2);
+      out.classList.remove('hidden');
+    };
+
+    async function getClientMetrics(fileList){
+      const files = Array.from(fileList || []).slice(0,3);
+      if(files.length===0) return null;
+      const bitmaps = await Promise.all(files.map(f=>createImageBitmap(f)));
+    }
+  </script>
+</body>
+</html>
