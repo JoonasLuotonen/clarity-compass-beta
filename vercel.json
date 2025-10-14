@@ -1,18 +1,5 @@
 {
   "functions": {
-    "api/analyze.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
-  "routes": [
-    {
-      "src": "/api/analyze",
-      "dest": "/api/analyze.js"
-    },
-    {
-      "src": "/(.*)",
-      "dest": "/index.html"
-    }
-  ]
+    "api/*.js": { "runtime": "nodejs20", "memory": 1024, "maxDuration": 10 }
+  }
 }
